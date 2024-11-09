@@ -15,9 +15,9 @@ from xgboost import XGBRegressor
 st.set_page_config(layout="wide")
 
 # Function to train prediction model
-def train_prediction_model(data, target_col, algorithm):
-    X = data.drop(target_col, axis=1)  # Features
-    y = data[target_col]               # Target
+def train_prediction_model(data, target_col, predictor_cols, algorithm):
+    X = data[predictor_cols]  # Features
+    y = data[target_col]       # Target
     
     # Split data into training and testing sets
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -36,7 +36,7 @@ def train_prediction_model(data, target_col, algorithm):
     # Make predictions
     y_pred = model.predict(X_test)
     
-    # Calculate and display Mean Squared Error (MSE)
+    # Calculate Mean Squared Error (MSE)
     mse = mean_squared_error(y_test, y_pred)
     
     return model, mse, X_test, y_test, y_pred
@@ -46,7 +46,7 @@ def train_forecasting_model(data, target_col, algorithm):
     y = data[target_col]  # Target for forecasting
 
     if algorithm == "ARIMA":
-        model = ARIMA(y, order=(5,1,0))  # Order is just an example, needs tuning
+        model = ARIMA(y, order=(5,1,0))  # Order is an example, needs tuning
         model_fit = model.fit()
         forecast = model_fit.forecast(steps=10)
     
@@ -76,53 +76,61 @@ if uploaded_file is not None:
     data = pd.read_csv(uploaded_file)
     st.write("Dataset Preview:", data.head())
     
-    # Step 3: Select target column
-    target_col = st.selectbox("Select the target column:", data.columns)
-    
-    # Step 4: Columns for task type and algorithm selection
-    col1, col2 = st.columns(2)
-    with col1:
-        task_type = st.selectbox("Choose Task Type:", ["Predict", "Forecast"])
-    
-    with col2:
-        # Select algorithm based on task type
-        if task_type == "Predict":
-            algorithm = st.selectbox("Select Prediction Algorithm:", ["Linear Regression", "Random Forest", "XGBoost"])
-        elif task_type == "Forecast":
-            algorithm = st.selectbox("Select Forecasting Algorithm:", ["ARIMA", "Prophet", "StatsForecast (AutoARIMA)"])
-    
-    # Step 5: Train and evaluate model based on selected task type and algorithm
-    if task_type == "Predict" and st.button("Train Prediction Model"):
-        model, mse, X_test, y_test, y_pred = train_prediction_model(data, target_col, algorithm)
-        st.write(f"Mean Squared Error of the model: {mse}")
+    # Step 3: Choose Task Type
+    task_type = st.selectbox("Choose Task Type:", ["Predict", "Forecast"], key="task_type")
+
+    if task_type == "Predict":
+        # Prediction options
+        algorithm = st.selectbox("Select Prediction Algorithm:", ["Linear Regression", "Random Forest", "XGBoost"], key="prediction_algorithm")
         
-        # Display actual vs predicted values
-        st.write("Actual vs Predicted:")
-        result_df = pd.DataFrame({'Actual': y_test, 'Predicted': y_pred})
-        st.write(result_df.head())
+        col1, col2 = st.columns(2)
+        with col1:
+            target_col = st.selectbox("Column to predict:", data.columns)
+        with col2:
+            predictor_cols = st.multiselect("Predictor columns:", [col for col in data.columns if col != target_col])
         
-        # Download prediction results
-        csv = result_df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="Download predictions as CSV",
-            data=csv,
-            file_name='cellular_traffic_predictions.csv',
-            mime='text/csv'
-        )
-    
-    elif task_type == "Forecast" and st.button("Train Forecasting Model"):
-        forecast = train_forecasting_model(data, target_col, algorithm)
-        st.write("Forecast for next 10 steps:")
-        st.write(forecast)
+        # Train model for prediction
+        if st.button("Train Prediction Model"):
+            if target_col and predictor_cols:
+                model, mse, X_test, y_test, y_pred = train_prediction_model(data, target_col, predictor_cols, algorithm)
+                st.write(f"Mean Squared Error of the model: {mse}")
+                
+                # Display actual vs predicted values
+                st.write("Actual vs Predicted:")
+                result_df = pd.DataFrame({'Actual': y_test, 'Predicted': y_pred})
+                st.write(result_df.head())
+                
+                # Download prediction results
+                csv = result_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="Download predictions as CSV",
+                    data=csv,
+                    file_name='cellular_traffic_predictions.csv',
+                    mime='text/csv'
+                )
+            else:
+                st.warning("Please select both the target column and predictor columns.")
+
+    elif task_type == "Forecast":
+        # Forecasting options
+        algorithm = st.selectbox("Select Forecasting Algorithm:", ["ARIMA", "Prophet", "StatsForecast (AutoARIMA)"], key="forecast_algorithm")
+        target_col = st.selectbox("Column to forecast:", data.columns, key="forecast_target")
         
-        # Download forecast results
-        forecast_df = pd.DataFrame({'Forecast': forecast})
-        csv = forecast_df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="Download forecast as CSV",
-            data=csv,
-            file_name='cellular_traffic_forecast.csv',
-            mime='text/csv'
-        )
+        # Train model for forecasting
+        if st.button("Train Forecasting Model"):
+            if target_col:
+                forecast = train_forecasting_model(data, target_col, algorithm)
+                st.write("Forecast for next 10 steps:")
+                st.write(forecast)
+                
+                # Download forecast results
+                forecast_df = pd.DataFrame({'Forecast': forecast})
+                csv = forecast_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="Download forecast as CSV",
+                    data=csv,
+                    file_name='cellular_traffic_forecast.csv',
+                    mime='text/csv'
+                )
 else:
     st.write("Please upload a CSV file to start the prediction or forecasting process.")

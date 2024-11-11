@@ -11,26 +11,20 @@ st.title("Data Modeling and Forecasting")
 # Step 1: Upload CSV File
 uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
 if uploaded_file:
+
     # Load and display data
     data = pd.read_csv(uploaded_file)
     st.write("Dataset Preview:", data.head())
 
-    # Step 2: Select Cell Names
+    # Step 2: Select Cell Name (Single Selection)
     if 'Cell Name' in data.columns:
         unique_cell_names = data['Cell Name'].unique()
-        select_all = st.checkbox("Select All Cell Names")
         
-        # Use all unique cell names if "Select All" is checked, else let user select
-        if select_all:
-            selected_cells = list(unique_cell_names)  # Select all cells
-        else:
-            selected_cells = st.multiselect("Select Cell Names", unique_cell_names)  # Manual selection
-
-        # Filter data by selected cell names
-        if selected_cells:
-            filtered_data = data[data['Cell Name'].isin(selected_cells)]
-        else:
-            filtered_data = data
+        # Allow only single cell name selection
+        selected_cell = st.selectbox("Select Cell Name", unique_cell_names)
+        
+        # Filter data by selected cell name
+        filtered_data = data[data['Cell Name'] == selected_cell]
     else:
         st.warning("Column 'Cell Name' not found in the uploaded data.")
         filtered_data = data

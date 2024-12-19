@@ -11,6 +11,8 @@ from xgboost import XGBRegressor
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, LSTM, GRU
 from tensorflow.keras.callbacks import EarlyStopping
+#from statsmodels.tsa.arima.model import ARIMA
+#from statsmodels.tsa.statespace.sarimax import SARIMAX
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, mean_squared_log_error
@@ -386,6 +388,67 @@ if uploaded_file:
                 plt.legend()
                 st.pyplot(plt)
 
+        if prediction_type == "Conventional":
+            # Conventional Prediction Configuration
+            algorithm = st.sidebar.selectbox("Choose Model", ["ARIMA", "SARIMA"])
+            target_column = st.sidebar.selectbox("Field to predict", filtered_data.columns)
+
+            # Start Predict Button for Conventional Prediction
+            if st.sidebar.button("Start Predict"):
+                st.sidebar.write("Starting Machine Learning prediction with", algorithm)
+                y = filtered_data[target_column]
+                # Memisahkan data menjadi set pelatihan dan pengujian
+                train_size = int(len(y) * 0.7)
+                y_train, y_test = y[:train_size], y[train_size:]
+                # Random Forest Algorithm
+                if algorithm == "ARIMA":
+                    # Menentukan parameter ARIMA (p, d, q)
+                    p, d, q = 1, 1, 1  # Pencarian nilai p, d, q yang tepat dapat dilakukan dengan trial-and-error atau grid search
+
+                    # Membangun model ARIMA
+                    arima_model = ARIMA(y_train, order=(p, d, q), enforce_stationarity=False, enforce_invertibility=False)
+                    arima_fit = arima_model.fit()
+
+                    # Prediksi pada data uji
+                    y_pred = arima_fit.predict(start=len(y_train), end=len(y_train) + len(y_test) - 1, dynamic=False)
+                if algorithm == "SARIMA":
+                    # Menentukan parameter SARIMA
+                    # (p, d, q) untuk ARIMA, dan (P, D, Q, S) untuk komponen musiman
+                    p, d, q = 1, 1, 2         # Tentukan parameter ARIMA yang sesuai
+                    P, D, Q, S = 1, 1, 1, 24  # P, D, Q untuk musiman dan S untuk periodisitas musiman (misalnya 24 untuk data harian per jam)
+
+                    # Membangun model SARIMA
+                    sarima_model = SARIMAX(y_train, order=(p, d, q), seasonal_order=(P, D, Q, S), enforce_stationarity=False, enforce_invertibility=False)
+                    sarima_fit = sarima_model.fit(disp=False)
+
+                    # Prediksi pada data uji
+                    y_pred = sarima_fit.predict(start=len(y_train), end=len(y_train) + len(y_test) - 1, dynamic=False)
+
+                # Evaluasi model pada data uji
+                mse = mean_squared_error(y_test, y_pred)
+                mae = mean_absolute_error(y_test, y_pred)
+                r2 = r2_score(y_test, y_pred)
+                msle = mean_squared_log_error(y_test, y_pred)
+                mape = np.mean(np.abs((y_test - y_pred) / y_test)) * 100
+
+                # Display evaluation metrics
+                st.write(f"\nEvaluation metrics for {target_column} using", algorithm, ":")
+                st.write(f"Mean Squared Error (MSE): {mse:.4f}")
+                st.write(f"Mean Absolute Error (MAE): {mae:.4f}")
+                st.write(f"R² Score: {r2:.4f}")
+                st.write(f"Mean Squared Logarithmic Error (MSLE): {msle:.4f}")
+                st.write(f"Mean Absolute Percentage Error (MAPE): {mape:.2f}%")
+
+                # Plotting Actual vs Predicted (For RF, DT, SVR, GradBoost, and XGBoost)
+                plt.figure(figsize=(12, 6))
+                plt.plot(y_test.index, y_test, label='Actual Data', color='blue')
+                plt.plot(y_test.index, y_pred, label='Predicted Data', color='red', linestyle='--')
+                plt.title(f"Actual vs Predicted {target_column} using {algorithm}")
+                plt.xlabel("Datetime")
+                plt.ylabel(target_column)
+                plt.legend()
+                st.pyplot(plt)
+        
     elif menu == "Data Visualization":
         st.subheader("Data Visualization")
 

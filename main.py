@@ -21,7 +21,7 @@ import warnings
 st.set_page_config(layout="wide")
 
 # Title
-st.title("Data Modeling and Forecasting")
+st.title("Cellular Network Traffic Prediction System")
 
 # Step 1: Upload CSV File
 uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
@@ -60,10 +60,8 @@ if uploaded_file:
     filtered_data = filtered_data.loc[start_date:end_date]
     st.write("Filtered Data:", filtered_data.head())
 
-    # Step 5: Preprocessing: Hanya ambil kolom numerik dan isi nilai kosong dengan mean
+    # Step 5: Preprocessing: Hanya ambil kolom numerik
     filtered_data = filtered_data.select_dtypes(include=[np.number])
-    filtered_data.fillna(filtered_data.mean(), inplace=True)
-
 
     # Step 5: Choose Prediction Type
     prediction_type = st.selectbox("Choose Prediction Type", ["Multivariable", "Univariable"])
@@ -98,8 +96,7 @@ if uploaded_file:
             filtered_data = filtered_data.dropna()
 
             # Set predictor and target columns
-            predictor_columns = [col for col in filtered_data.columns if col != target_column]
-            X = filtered_data[predictor_columns]
+            X = filtered_data[feature_columns]
             y = filtered_data[target_column]
 
             # Train/Test split

@@ -74,7 +74,7 @@ if uploaded_file:
             test_split = st.sidebar.slider("Split for training/test", 0.1, 0.9, 0.3)
 
             if st.sidebar.button("Start Predict"):
-                st.sidebar.write("Starting Deep Learning prediction with", algorithm)
+                st.sidebar.write("Starting Deep Learning prediction with", algorithm, "...")
                 # Prepare data for prediction
                 filtered_data['Hour'] = filtered_data.index.hour
                 filtered_data['Day'] = filtered_data.index.day
@@ -182,10 +182,20 @@ if uploaded_file:
 
                 # Display evaluation metrics
                 st.write(f"\nEvaluation metrics for {target_column} using", algorithm, ":")
-                st.write(f"Mean Squared Error (MSE): {mse:.4f}")
-                st.write(f"Mean Absolute Error (MAE): {mae:.4f}")
-                st.write(f"R² Score: {r2:.4f}")
-                st.write(f"Mean Squared Logarithmic Error (MSLE): {msle:.4f}")
+                col1, col2 = st.columns(2)
+                # Left column for MSE and MAE
+                with col1:
+                    st.markdown(f"<div style='text-align: center;'><strong>Mean Squared Error (MSE):</strong> {mse:.4f}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='text-align: center;'><strong>Mean Absolute Error (MAE):</strong> {mae:.4f}</div>", unsafe_allow_html=True)
+
+                # Right column for MSLE and MAPE
+                with col2:
+                    st.markdown(f"<div style='text-align: center;'><strong>Mean Squared Logarithmic Error (MSLE):</strong> {msle:.4f}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='text-align: center;'><strong>Mean Absolute Percentage Error (MAPE):</strong> {mape:.2f}%</div>", unsafe_allow_html=True)
+
+                # Center R² Score at the bottom
+                st.markdown(f"<div style='text-align: center; margin-top: 20px;'><strong>R² Score:</strong> {r2:.4f}</div>", unsafe_allow_html=True)
+                st.write(" ")
                 
                 # Plotting Actual vs Predicted (For LSTM and GRU)
                 plt.figure(figsize=(12, 6))
@@ -210,7 +220,7 @@ if uploaded_file:
 
             # Start Predict Button for Machine Learning
             if st.sidebar.button("Start Predict"):
-                st.sidebar.write("Starting Machine Learning prediction with", algorithm)
+                st.sidebar.write("Starting Machine Learning prediction with", algorithm, "...")
                 # Prepare data for prediction
                 filtered_data['Hour'] = filtered_data.index.hour
                 filtered_data['Day'] = filtered_data.index.day
@@ -371,12 +381,22 @@ if uploaded_file:
                 mape = np.mean(np.abs((y_test - y_pred) / y_test)) * 100
 
                 # Display evaluation metrics
+                
                 st.write(f"\nEvaluation metrics for {target_column} using", algorithm, ":")
-                st.write(f"Mean Squared Error (MSE): {mse:.4f}")
-                st.write(f"Mean Absolute Error (MAE): {mae:.4f}")
-                st.write(f"R² Score: {r2:.4f}")
-                st.write(f"Mean Squared Logarithmic Error (MSLE): {msle:.4f}")
-                st.write(f"Mean Absolute Percentage Error (MAPE): {mape:.2f}%")
+                col1, col2 = st.columns(2)
+                # Left column for MSE and MAE
+                with col1:
+                    st.markdown(f"<div style='text-align: center;'><strong>Mean Squared Error (MSE):</strong> {mse:.4f}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='text-align: center;'><strong>Mean Absolute Error (MAE):</strong> {mae:.4f}</div>", unsafe_allow_html=True)
+
+                # Right column for MSLE and MAPE
+                with col2:
+                    st.markdown(f"<div style='text-align: center;'><strong>Mean Squared Logarithmic Error (MSLE):</strong> {msle:.4f}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='text-align: center;'><strong>Mean Absolute Percentage Error (MAPE):</strong> {mape:.2f}%</div>", unsafe_allow_html=True)
+
+                # Center R² Score at the bottom
+                st.markdown(f"<div style='text-align: center; margin-top: 20px;'><strong>R² Score:</strong> {r2:.4f}</div>", unsafe_allow_html=True)
+                st.write(" ")
 
                 # Plotting Actual vs Predicted (For RF, DT, SVR, GradBoost, and XGBoost)
                 plt.figure(figsize=(12, 6))
@@ -395,7 +415,7 @@ if uploaded_file:
 
             # Start Predict Button for Conventional Prediction
             if st.sidebar.button("Start Predict"):
-                st.sidebar.write("Starting Machine Learning prediction with", algorithm)
+                st.sidebar.write("Starting Machine Learning prediction with", algorithm, "...")
                 y = filtered_data[target_column]
                 # Memisahkan data menjadi set pelatihan dan pengujian
                 train_size = int(len(y) * 0.7)
@@ -433,11 +453,20 @@ if uploaded_file:
 
                 # Display evaluation metrics
                 st.write(f"\nEvaluation metrics for {target_column} using", algorithm, ":")
-                st.write(f"Mean Squared Error (MSE): {mse:.4f}")
-                st.write(f"Mean Absolute Error (MAE): {mae:.4f}")
-                st.write(f"R² Score: {r2:.4f}")
-                st.write(f"Mean Squared Logarithmic Error (MSLE): {msle:.4f}")
-                st.write(f"Mean Absolute Percentage Error (MAPE): {mape:.2f}%")
+                col1, col2 = st.columns(2)
+                # Left column for MSE and MAE
+                with col1:
+                    st.markdown(f"<div style='text-align: center;'><strong>Mean Squared Error (MSE):</strong> {mse:.4f}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='text-align: center;'><strong>Mean Absolute Error (MAE):</strong> {mae:.4f}</div>", unsafe_allow_html=True)
+
+                # Right column for MSLE and MAPE
+                with col2:
+                    st.markdown(f"<div style='text-align: center;'><strong>Mean Squared Logarithmic Error (MSLE):</strong> {msle:.4f}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='text-align: center;'><strong>Mean Absolute Percentage Error (MAPE):</strong> {mape:.2f}%</div>", unsafe_allow_html=True)
+
+                # Center R² Score at the bottom
+                st.markdown(f"<div style='text-align: center; margin-top: 20px;'><strong>R² Score:</strong> {r2:.4f}</div>", unsafe_allow_html=True)
+                st.write(" ")
 
                 # Plotting Actual vs Predicted (For RF, DT, SVR, GradBoost, and XGBoost)
                 plt.figure(figsize=(12, 6))

@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split, GridSearchCV, TimeSeriesSplit
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.tree import DecisionTreeRegressor
+from sklearn.neighbors import KNeighborsRegressor
 from sklearn.svm import SVR
 from sklearn.ensemble import GradientBoostingRegressor
 from xgboost import XGBRegressor
@@ -210,7 +211,7 @@ if uploaded_file:
 
         if prediction_type == "Machine Learning":
             # Machine Learning Prediction Configuration
-            algorithm = st.sidebar.selectbox("Choose Model", ["Random Forest", "Decision Tree", "SVR", "Gradient Boosting", "XGBoost"])
+            algorithm = st.sidebar.selectbox("Choose Model", ["Random Forest", "Decision Tree", "KNN", "SVR", "Gradient Boosting", "XGBoost"])
             target_column = st.sidebar.selectbox("Field to predict", filtered_data.columns)
 
             feature_columns = [col for col in filtered_data.columns if col != target_column]
@@ -291,6 +292,34 @@ if uploaded_file:
                     best_model = grid_search.best_estimator_
 
                     # Model Prediction
+                    y_pred = best_model.predict(X_test)
+                
+                # KNN Regressor Algorithm
+                if algorithm == "KNN":
+                    # Membuat pipeline dengan StandardScaler dan KNeighborsRegressor
+                    pipeline = Pipeline([
+                        ('scaler', StandardScaler()),
+                        ('knn', KNeighborsRegressor())
+                    ])
+
+                    # Hyperparameter tuning untuk KNeighborsRegressor
+                    param_grid = {
+                        'knn__n_neighbors': [3, 5, 10],        # Jumlah tetangga terdekat
+                        'knn__weights': ['uniform', 'distance'],  # Bobot jarak
+                        'knn__p': [1, 2]                        # Jenis jarak (1 = Manhattan, 2 = Euclidean)
+                    }
+
+                    # Menggunakan TimeSeriesSplit untuk cross-validation
+                    tscv = TimeSeriesSplit(n_splits=5)
+
+                    # GridSearchCV untuk hyperparameter tuning
+                    grid_search = GridSearchCV(pipeline, param_grid, cv=tscv, scoring='neg_mean_squared_error', n_jobs=-1)
+                    grid_search.fit(X_train, y_train)
+
+                    # Model terbaik berdasarkan GridSearchCV
+                    best_model = grid_search.best_estimator_
+
+                    # Evaluasi model pada data uji
                     y_pred = best_model.predict(X_test)
                 
                 # SVR Algorithm
@@ -502,15 +531,6 @@ if uploaded_file:
         plt.xlabel("Datetime")
         plt.ylabel(target_column_vis)
         st.pyplot(plt)
-
-        if st.sidebar.checkbox("Show Correlation Heatmap"):
-            import seaborn as sns
-            corr = data.corr()
-            st.write("### Correlation Heatmap")
-            plt.figure(figsize=(10, 8))
-            sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f")
-            plt.title("Correlation Heatmap")
-            st.pyplot(plt)
 
 
 else:

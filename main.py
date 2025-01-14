@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import plotly.graph_objects as go
 from sklearn.model_selection import train_test_split, GridSearchCV, TimeSeriesSplit
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.svm import SVR
@@ -13,8 +13,7 @@ from xgboost import XGBRegressor
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, LSTM, GRU
 from tensorflow.keras.callbacks import EarlyStopping
-#from statsmodels.tsa.arima.model import ARIMA
-#from statsmodels.tsa.statespace.sarimax import SARIMAX
+from statsmodels.tsa.statespace.sarimax import SARIMAX
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, mean_squared_log_error
@@ -32,6 +31,17 @@ if uploaded_file:
 
     # Load and display data
     data = pd.read_csv(uploaded_file)
+
+    # Daftar kolom yang ingin dikecualikan dari konversi
+    excluded_columns = ['4G Avg UL Interference','Integrity','4G RSSI (Cells)', 'Date', 'Time', 'eNodeB Name', 'Cell Name']
+
+    # Mengubah semua kolom kecuali kolom yang dikecualikan menjadi tipe numerik
+    for col in data.columns:
+        if col not in excluded_columns:
+            data[col] = pd.to_numeric(data[col], errors='coerce')
+
+    # Mengubah kolom '4G RSSI (Cells)' menjadi tipe object
+    data['4G RSSI (Cells)'] = data['4G RSSI (Cells)'].astype(object)
 
     # Preprocessing: Merge 'Date' and 'Time' into 'Datetime'
     if 'Date' in data.columns and 'Time' in data.columns:
@@ -61,6 +71,7 @@ if uploaded_file:
         
         # Step 5: Preprocessing: Hanya ambil kolom numerik
         filtered_data = filtered_data.select_dtypes(include=[np.number])
+        filtered_data.fillna(filtered_data.mean(), inplace=True)
 
         # Sidebar: Choose Prediction Type
         prediction_type = st.sidebar.selectbox("Choose Prediction Type", ["Deep Learning", "Machine Learning", "Statistic"])
@@ -134,6 +145,30 @@ if uploaded_file:
 
                         progress.progress(80)  # Update progress to 100%
 
+                        # Prediksi untuk 3 hari ke depan (72 jam)
+                        future_steps = 72
+                        last_known_values = X_test[-1].reshape(1, 1, -1)  # Pastikan input memiliki dimensi [1, 1, features]
+                        predictions = []
+
+                        for _ in range(future_steps):
+                            # Prediksi nilai baru
+                            prediction = model.predict(last_known_values, verbose=0)[0][0]
+                            predictions.append(prediction)
+
+                            # Update input dengan nilai prediksi untuk iterasi berikutnya
+                            new_input = np.append(last_known_values[0, 0, 1:], prediction).reshape(1, 1, -1)
+                            last_known_values = new_input
+
+                        # Membalikkan normalisasi pada prediksi
+                        predictions = scaler_y.inverse_transform(np.array(predictions).reshape(-1, 1))
+
+                        # Membuat DataFrame untuk prediksi
+                        future_dates = pd.date_range(start=data.index[-1], periods=future_steps + 1, freq='H')[1:]
+                        future_df = pd.DataFrame({
+                            'Datetime': future_dates,
+                            'Predicted 4G Total Traffic (GB)': predictions.flatten()
+})
+
                         # Prediksi menggunakan model
                         y_pred_train = model.predict(X_train)
                         y_pred_test = model.predict(X_test)
@@ -179,6 +214,29 @@ if uploaded_file:
                         history = model.fit(X_train, y_train, epochs=100, batch_size=32, validation_split=0.2, callbacks=[early_stop], verbose=1)
 
                         progress.progress(80)  # Update progress to 100%
+                        # Prediksi untuk 3 hari ke depan (72 jam)
+                        future_steps = 72
+                        last_known_values = X_test[-1].reshape(1, 1, -1)  # Pastikan input memiliki dimensi [1, 1, features]
+                        predictions = []
+
+                        for _ in range(future_steps):
+                            # Prediksi nilai baru
+                            prediction = model.predict(last_known_values, verbose=0)[0][0]
+                            predictions.append(prediction)
+
+                            # Update input dengan nilai prediksi untuk iterasi berikutnya
+                            new_input = np.append(last_known_values[0, 0, 1:], prediction).reshape(1, 1, -1)
+                            last_known_values = new_input
+
+                        # Membalikkan normalisasi pada prediksi
+                        predictions = scaler_y.inverse_transform(np.array(predictions).reshape(-1, 1))
+
+                        # Membuat DataFrame untuk prediksi
+                        future_dates = pd.date_range(start=data.index[-1], periods=future_steps + 1, freq='H')[1:]
+                        future_df = pd.DataFrame({
+                            'Datetime': future_dates,
+                            'Predicted 4G Total Traffic (GB)': predictions.flatten()
+})
 
                         # Prediksi menggunakan model
                         y_pred_train = model.predict(X_train)
@@ -218,47 +276,63 @@ if uploaded_file:
                 # Pastikan akses ke index asli sebelum split
                 original_index = filtered_data.index[-len(y_test):]  # Ambil index data uji (y_test)
 
-                # Plotting Actual vs Predicted (For LSTM and GRU)
-                plt.figure(figsize=(12, 6))
-                plt.plot(original_index, y_test, label='Actual Date', color='blue')
-                plt.plot(original_index, y_pred_test, label='Predicted', color='red', linestyle='--')
-                plt.title(f"Actual vs Predicted {target_column} using {algorithm}")
-                plt.xlabel("Datetime")
-                plt.ylabel(target_column)
-                plt.legend()
-                st.pyplot(plt)
+                # Kolom untuk Actual vs Predicted dan Prediksi 3 Hari ke Depan
+                col1, col2 = st.columns(2)
 
-                # Plot perbandingan antara data sebenarnya dan prediksi (default 120 jam terakhir)
-                plt.figure(figsize=(14, 6))
-                plt.plot(original_index[-120:], y_test[-120:], label='Data Sebenarnya', color='blue')
-                plt.plot(original_index[-120:], y_pred_test[-120:], label='Data Prediksi', color='red', linestyle='--')
-                plt.title(f"Actual vs Predicted {target_column} (120 Jam Terakhir) using {algorithm}")
-                plt.xlabel("Datetime")
-                plt.ylabel(target_column)
-                plt.legend()
-                st.pyplot(plt)
+                with col1:
+                    st.write(f"### Actual vs Predicted {target_column} using {algorithm}")
+                    plt.figure(figsize=(12, 6))  # Adjusted size for column layout
+                    plt.plot(original_index, y_test, label='Actual', color='blue')
+                    plt.plot(original_index, y_pred_test, label='Predicted', color='red', linestyle='--')
+                    plt.title(f"Actual vs Predicted {target_column} using {algorithm}")
+                    plt.xlabel("Datetime")
+                    plt.ylabel(target_column)
+                    plt.legend()
+                    st.pyplot(plt)
 
+                with col2:
+                    st.write("### Prediksi 3 Hari ke Depan 4G Total Traffic")
+                    plt.figure(figsize=(12, 6))  # Adjusted size for column layout
+                    plt.plot(future_df['Datetime'], future_df['Predicted 4G Total Traffic (GB)'], label='Prediksi', color='green')
+                    plt.title("Prediksi 3 Hari ke Depan: 4G Total Traffic (GB)")
+                    plt.xlabel("Datetime")
+                    plt.ylabel(target_column)
+                    plt.legend()
+                    st.pyplot(plt)
 
-                # Tambahkan kembali identitas data ke dalam DataFrame
-                # Tambahkan kembali identitas data ke dalam DataFrame
-                comparison_df = pd.DataFrame({
-                    "Date": data.index[-len(y_test):],  # Ambil tanggal dari data asli untuk subset data uji
-                    "Time": data['Time'][-len(y_test):].values,  # Ambil kolom Time sesuai index data uji
-                    "eNodeB Name": data['eNodeB Name'][-len(y_test):].values,  # Kolom eNodeB Name
-                    "Cell Name": data['Cell Name'][-len(y_test):].values,  # Kolom Cell Name
-                    "Actual": y_test.flatten(),
-                    "Predicted": y_pred_test.flatten(),
-                    "Difference": (y_test.flatten() - y_pred_test.flatten())
-                })
+                # Kolom untuk Actual vs Predicted (5 Hari Terakhir) dan tabel komparasi
+                col3, col4 = st.columns(2)
 
-                # Menampilkan tabel di Streamlit
-                st.write("### Actual vs Predicted Comparison")
-                st.dataframe(comparison_df)  # Tambahkan parameter untuk memenuhi window
+                with col3:
+                    st.write(f"### Actual vs Predicted {target_column} 5 Hari Terakhir using {algorithm}")
+                    plt.figure(figsize=(12, 6))  # Adjusted size for column layout
+                    plt.plot(original_index[-120:], y_test[-120:], label='Data Sebenarnya', color='blue')
+                    plt.plot(original_index[-120:], y_pred_test[-120:], label='Data Prediksi', color='red', linestyle='--')
+                    plt.title(f"Actual vs Predicted {target_column} (5 Hari Terakhir) using {algorithm}")
+                    plt.xlabel("Datetime")
+                    plt.ylabel(target_column)
+                    plt.legend()
+                    st.pyplot(plt)
+
+                with col4:
+                    # Tambahkan kembali identitas data ke dalam DataFrame
+                    comparison_df = pd.DataFrame({
+                        "Date": data.index[-len(y_test):],  # Ambil tanggal dari data asli untuk subset data uji
+                        "Time": data['Time'][-len(y_test):].values,  # Ambil kolom Time sesuai index data uji
+                        "eNodeB Name": data['eNodeB Name'][-len(y_test):].values,  # Kolom eNodeB Name
+                        "Cell Name": data['Cell Name'][-len(y_test):].values,  # Kolom Cell Name
+                        "Actual": y_test.flatten(),
+                        "Predicted": y_pred_test.flatten(),
+                        "Difference": (y_test.flatten() - y_pred_test.flatten())
+                    })
+
+                    st.write(f"### Actual vs Predicted Comparison")
+                    st.dataframe(comparison_df)
 
 
         if prediction_type == "Machine Learning":
             # Machine Learning Prediction Configuration
-            algorithm = st.sidebar.selectbox("Choose Model", ["Random Forest", "Decision Tree", "KNN", "SVR", "Gradient Boosting", "XGBoost"])
+            algorithm = st.sidebar.selectbox("Choose Model", [ "Random Forest", "Decision Tree", "SVR", "KNN", "Gradient Boosting", "XGBoost"])
             target_column = st.sidebar.selectbox("Field to predict", filtered_data.columns)
 
             feature_columns = [col for col in filtered_data.columns if col != target_column]
@@ -269,7 +343,7 @@ if uploaded_file:
             # Start Predict Button for Machine Learning
             if st.sidebar.button("Start Predict"):
                 progress = st.progress(0)
-                with st.spinner(f"Starting Deep Learning Prediction with {algorithm}..."):
+                with st.spinner(f"Starting Machine Learning Prediction with {algorithm}..."):
                     # Update progress to 20%
                     progress.progress(20)
                     # Prepare data for prediction
@@ -277,10 +351,9 @@ if uploaded_file:
                     filtered_data['Day'] = filtered_data.index.day
                     filtered_data['Month'] = filtered_data.index.month
 
-                    # Lag features
-                    filtered_data[target_column,'_lag1'] = filtered_data[target_column].shift(1)
-                    filtered_data[target_column,'_lag2'] = filtered_data[target_column].shift(2)
-                    filtered_data[target_column,'_lag3'] = filtered_data[target_column].shift(3)
+                    for lag in range(1, 4):
+                        filtered_data[f"{target_column}_lag{lag}"] = filtered_data[target_column].shift(lag)
+
                     filtered_data = filtered_data.dropna()
 
                     # Set predictor and target columns
@@ -358,7 +431,7 @@ if uploaded_file:
 
                         progress.progress(100)  # Update progress to 100%
                     
-                    # KNN Regressor Algorithm
+                    # LR Regressor Algorithm
                     if algorithm == "KNN":
                         # Membuat pipeline dengan StandardScaler dan KNeighborsRegressor
                         pipeline = Pipeline([
@@ -392,6 +465,7 @@ if uploaded_file:
 
                         progress.progress(100)  # Update progress to 100%
                     
+                    
                     # SVR Algorithm
                     if algorithm == "SVR":
                         # Membuat pipeline dengan StandardScaler dan SVR
@@ -402,8 +476,8 @@ if uploaded_file:
 
                         # Menentukan grid parameter yang lebih luas untuk SVR
                         param_grid = {
-                            'svr__C': [1, 0.1, 1, 10, 1],        # Rentang nilai C yang lebih luas
-                            'svr__epsilon': [0.1, 0.5],  # Rentang epsilon yang lebih luas
+                            'svr__C': [1, 10],        # Rentang nilai C yang lebih luas
+                            'svr__epsilon': [0.5],  # Rentang epsilon yang lebih luas
                             'svr__kernel': ['linear', 'rbf'],         # Kernel 'linear' dan 'rbf'
                             'svr__gamma': ['scale', 'auto']           # Gamma untuk kernel 'rbf'
                         }
@@ -412,13 +486,13 @@ if uploaded_file:
                         tscv = TimeSeriesSplit(n_splits=5)
                         grid_search = GridSearchCV(pipeline, param_grid, cv=tscv, scoring='neg_mean_squared_error', n_jobs=-1)
                         grid_search.fit(X_train, y_train)
-
-                        progress.progress(60)  # Update progress to 60%
+                        
+                        progress.progress(60)  # Update progress to 60
 
                         # Best model
                         best_model = grid_search.best_estimator_
 
-                        progress.progress(80)  # Update progress to 80%
+                        progress.progress(80)  # Update progress to 100%
 
                         # Model Prediction
                         y_pred = best_model.predict(X_test)
@@ -475,7 +549,7 @@ if uploaded_file:
 
                         # Cross-validation with TimeSeriesSplit
                         tscv = TimeSeriesSplit(n_splits=5)
-                        grid_search = GridSearchCV(pipeline, param_grid, cv=tscv, scoring='neg_mean_squared_error', n_jobs=-1)
+                        grid_search = GridSearchCV(pipeline, param_grid, cv=tscv, scoring='neg_mean_squared_error', n_jobs=-2)
                         grid_search.fit(X_train, y_train)
 
                         progress.progress(60)  # Update progress to 60%
@@ -492,7 +566,7 @@ if uploaded_file:
 
                 st.success("Prediction complete!")
 
-                # Model Evaluation (For RF, DT, SVR, GradBoost, and XGBoost)
+                # Model Evaluation (For RF, DT, SVR, GradBoost, LGBoost and XGBoost)
                 mse = mean_squared_error(y_test, y_pred)
                 mae = mean_absolute_error(y_test, y_pred)
                 r2 = r2_score(y_test, y_pred)
@@ -513,34 +587,38 @@ if uploaded_file:
                 with col5:
                     st.metric(label="MAPE", value=f"{mape:.2f}%")
 
-                # Plotting Actual vs Predicted (For RF, DT, SVR, GradBoost, and XGBoost)
-                plt.figure(figsize=(12, 6))
-                plt.plot(y_test.index, y_test, label='Actual Data', color='blue')
-                plt.plot(y_test.index, y_pred, label='Predicted Data', color='red', linestyle='--')
-                plt.title(f"Actual vs Predicted {target_column} using {algorithm}")
-                plt.xlabel("Datetime")
-                plt.ylabel(target_column)
-                plt.legend()
-                st.pyplot(plt)
+                # Pastikan akses ke index asli sebelum split
+                original_index = filtered_data.index[-len(y_test):]  # Ambil index data uji (y_test)
 
-                # Tambahkan kembali identitas data ke dalam DataFrame
-                comparison_df = pd.DataFrame({
-                    "Date": data.index[-len(y_test):],  # Ambil tanggal dari data asli untuk subset data uji
-                    "Time": data['Time'][-len(y_test):].values,  # Ambil kolom Time sesuai index data uji
-                    "eNodeB Name": data['eNodeB Name'][-len(y_test):].values,  # Kolom eNodeB Name
-                    "Cell Name": data['Cell Name'][-len(y_test):].values,  # Kolom Cell Name
-                    "Actual": y_test.values,  # Data aktual diakses sebagai array
-                    "Predicted": y_pred,  # Data prediksi sudah berupa array
-                    "Difference": (y_test.values - y_pred)  # Selisih antara data aktual dan prediksi
-                })
+                # Kolom untuk Actual vs Predicted dan Prediksi 3 Hari ke Depan
+                col1, col2 = st.columns(2)
 
-                # Menampilkan tabel di Streamlit
-                st.write("### Actual vs Predicted Comparison")
-                st.dataframe(comparison_df)  # Menampilkan tabel dalam Streamlit
+                with col1:
+                    # Plotting Actual vs Predicted (For LR, RF, DT, SVR, GradBoost, and XGBoost)
+                    plt.figure(figsize=(12, 6))
+                    plt.plot(y_test.index, y_test, label='Actual Data', color='blue')
+                    plt.plot(y_test.index, y_pred, label='Predicted Data', color='red', linestyle='--')
+                    plt.title(f"Actual vs Predicted {target_column} using {algorithm}")
+                    plt.xlabel("Datetime")
+                    plt.ylabel(target_column)
+                    plt.legend()
+                    st.pyplot(plt)
+
+                with col2:
+                    # Plot perbandingan antara data sebenarnya dan prediksi (default 120 jam terakhir)
+                    plt.figure(figsize=(12, 6))
+                    plt.plot(original_index[-120:], y_test[-120:], label='Data Sebenarnya', color='blue')
+                    plt.plot(original_index[-120:], y_pred[-120:], label='Data Prediksi', color='red', linestyle='--')
+                    plt.title(f"Actual vs Predicted {target_column} (120 Jam Terakhir) using {algorithm}")
+                    plt.xlabel("Datetime")
+                    plt.ylabel(target_column)
+                    plt.legend()
+                    st.pyplot(plt)
+                
 
         if prediction_type == "Statistic":
             # Statistic Prediction Configuration
-            algorithm = st.sidebar.selectbox("Choose Model", ["ARIMA", "SARIMA"])
+            algorithm = st.sidebar.selectbox("Choose Model", ["SARIMA"])
             target_column = st.sidebar.selectbox("Field to predict", filtered_data.columns)
 
             # Start Predict Button for Statistic Prediction
@@ -552,32 +630,13 @@ if uploaded_file:
                     # Update progress to 20%
                     progress.progress(20)
 
-                    y = filtered_data[target_column]
-                    # Memisahkan data menjadi set pelatihan dan pengujian
-                    train_size = int(len(y) * 0.7)
-                    y_train, y_test = y[:train_size], y[train_size:]
-
-                    progress.progress(40)  # Update progress to 40%
-
-                    # Random Forest Algorithm
-                    if algorithm == "ARIMA":
-                        # Menentukan parameter ARIMA (p, d, q)
-                        p, d, q = 1, 1, 1  # Pencarian nilai p, d, q yang tepat dapat dilakukan dengan trial-and-error atau grid search
-
-                        progress.progress(60)  # Update progress to 60%
-
-                        # Membangun model ARIMA
-                        arima_model = ARIMA(y_train, order=(p, d, q), enforce_stationarity=False, enforce_invertibility=False)
-                        arima_fit = arima_model.fit()
-
-                        progress.progress(80)  # Update progress to 80%
-
-                        # Prediksi pada data uji
-                        y_pred = arima_fit.predict(start=len(y_train), end=len(y_train) + len(y_test) - 1, dynamic=False)
-                    
-                        progress.progress(100)  # Update progress to 100%
-
                     if algorithm == "SARIMA":
+                        y = filtered_data[target_column]
+                        # Memisahkan data menjadi set pelatihan dan pengujian
+                        train_size = int(len(y) * 0.7)
+                        y_train, y_test = y[:train_size], y[train_size:]
+
+                        progress.progress(40)  # Update progress to 40%
                         # Menentukan parameter SARIMA
                         # (p, d, q) untuk ARIMA, dan (P, D, Q, S) untuk komponen musiman
                         p, d, q = 1, 1, 2         # Tentukan parameter ARIMA yang sesuai
@@ -595,43 +654,43 @@ if uploaded_file:
                         y_pred = sarima_fit.predict(start=len(y_train), end=len(y_train) + len(y_test) - 1, dynamic=False)
                         
                         progress.progress(100)  # Update progress to 100%
+                        st.success("Prediction complete!")
+                        
+                        # Evaluasi model pada data uji
+                        mse = mean_squared_error(y_test, y_pred)
+                        mae = mean_absolute_error(y_test, y_pred)
+                        r2 = r2_score(y_test, y_pred)
+                        msle = mean_squared_log_error(y_test, y_pred)
+                        mape = np.mean(np.abs((y_test - y_pred) / y_test)) * 100
 
-                st.success("Prediction complete!")
-                
-                # Evaluasi model pada data uji
-                mse = mean_squared_error(y_test, y_pred)
-                mae = mean_absolute_error(y_test, y_pred)
-                r2 = r2_score(y_test, y_pred)
-                msle = mean_squared_log_error(y_test, y_pred)
-                mape = np.mean(np.abs((y_test - y_pred) / y_test)) * 100
+                        # Display metrics
+                        st.markdown(f"### Evaluation metrics for {target_column} using {algorithm}:")
+                        col1, col2, col3, col4, col5 = st.columns(5)  # Menambahkan satu kolom lagi
+                        with col1:
+                            st.metric(label="Mean Squared Error (MSE)", value=f"{mse:.4f}")
+                        with col2:
+                            st.metric(label="Mean Absolute Error (MAE)", value=f"{mae:.4f}")
+                        with col3:
+                            st.metric(label="R² Score", value=f"{r2:.4f}")
+                        with col4:
+                            st.metric(label="MSLE", value=f"{msle:.4f}")
+                        with col5:
+                            st.metric(label="MAPE", value=f"{mape:.2f}%")
 
-                # Display metrics
-                st.markdown(f"### Evaluation metrics for {target_column} using {algorithm}:")
-                col1, col2, col3, col4, col5 = st.columns(5)  # Menambahkan satu kolom lagi
-                with col1:
-                    st.metric(label="Mean Squared Error (MSE)", value=f"{mse:.4f}")
-                with col2:
-                    st.metric(label="Mean Absolute Error (MAE)", value=f"{mae:.4f}")
-                with col3:
-                    st.metric(label="R² Score", value=f"{r2:.4f}")
-                with col4:
-                    st.metric(label="MSLE", value=f"{msle:.4f}")
-                with col5:
-                    st.metric(label="MAPE", value=f"{mape:.2f}%")
+                        # Plotting Actual vs Predicted (ARIMA dan SARIMA)
+                        plt.figure(figsize=(12, 6))
+                        plt.plot(y_test.index, y_test, label='Actual Data', color='blue')
+                        plt.plot(y_test.index, y_pred, label='Predicted Data', color='red', linestyle='--')
+                        plt.title(f"Actual vs Predicted {target_column} using {algorithm}")
+                        plt.xlabel("Datetime")
+                        plt.ylabel(target_column)
+                        plt.legend()
+                        st.pyplot(plt)
 
-                # Plotting Actual vs Predicted (ARIMA dan SARIMA)
-                plt.figure(figsize=(12, 6))
-                plt.plot(y_test.index, y_test, label='Actual Data', color='blue')
-                plt.plot(y_test.index, y_pred, label='Predicted Data', color='red', linestyle='--')
-                plt.title(f"Actual vs Predicted {target_column} using {algorithm}")
-                plt.xlabel("Datetime")
-                plt.ylabel(target_column)
-                plt.legend()
-                st.pyplot(plt)
-        
+                                           
     elif menu == "Data Visualization":
         st.subheader("Data Visualization")
-    
+
         # Sidebar: Visualization Configuration
         if 'Cell Name' in data.columns:
             unique_cell_names = data['Cell Name'].unique()
@@ -643,9 +702,48 @@ if uploaded_file:
 
         # Display Filtered Data
         st.write(f"### Filtered Data for Selected Cell", data_vis.head())
-        
+
+
+        # Kolom untuk 4G Total Traffic dan 4G Active User
+        col_4g_total_traffic = "4G Total Traffic (GB)"
+        col_4g_active_user = "4G Active User"
+       
+        # Menampilkan Top 5 Cell Name untuk Total Traffic dan Active User
+        st.write("### Top 5 Cell Name by Total Traffic and Active User")
+
+        # Menghitung top 5 cell dengan total traffic tertinggi
+        top_5_traffic = data.groupby('Cell Name')[col_4g_total_traffic].sum().nlargest(5)
+
+        # Menghitung top 5 cell dengan active user tertinggi
+        top_5_users = data.groupby('Cell Name')[col_4g_active_user].sum().nlargest(5)
+
+        # Membuat dua kolom sejajar
+        col1, col2 = st.columns(2)
+
+        # Plot untuk Top 5 Total Traffic
+        with col1:
+            plt.figure(figsize=(6, 6))
+            top_5_traffic.plot(kind='bar', color='mediumseagreen', edgecolor='black')
+            plt.title(f"Top 5 Cell Name by {col_4g_total_traffic}")
+            plt.xlabel("Cell Name")
+            plt.ylabel(col_4g_total_traffic)
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+            st.pyplot(plt)
+
+        # Plot untuk Top 5 Active User
+        with col2:
+            plt.figure(figsize=(6, 6))
+            top_5_users.plot(kind='bar', color='steelblue', edgecolor='black')
+            plt.title(f"Top 5 Cell Name by {col_4g_active_user}")
+            plt.xlabel("Cell Name")
+            plt.ylabel(col_4g_active_user)
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+            st.pyplot(plt)
+
         target_column_vis = st.sidebar.selectbox("Select Column to Visualize", data_vis.select_dtypes(include=[np.number]).columns)
-        if st.sidebar.button("Start Predict"):
+        if st.sidebar.button("Start Visualization"):
             progress = st.progress(0)
             with st.spinner(f"Starting Visualization for {target_column_vis}..."):
                 progress.progress(0)  # Update progress to 0%
@@ -686,6 +784,5 @@ if uploaded_file:
                 st.pyplot(plt)
                 progress.progress(100)  # Update progress to 100%
 
-                
 else:
     st.write("Please upload a CSV file to get started.")
